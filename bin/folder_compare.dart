@@ -100,5 +100,9 @@ void main(List<String> arguments) async {
     print(e.message);
     print('');
     printUsage(argParser);
+  } catch (e, s) {
+    // Print the error and stack trace.
+    print('An error occurred: $e');
+    print(s);
   }
 }
