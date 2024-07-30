@@ -72,6 +72,10 @@ void main(List<String> arguments) async {
       throw FormatException('Missing required argument: folderB');
     }
 
+    print('Comparing folders:');
+    print('Folder A: $folderA');
+    print('Folder B: $folderB');
+
     // Check if the provided folders exist.
     final Directory dirA = Directory(folderA);
     final Directory dirB = Directory(folderB);
