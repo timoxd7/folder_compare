@@ -1,11 +1,14 @@
 import 'dart:io';
 
+import 'package:intl/intl.dart';
+
 import 'compare_files.dart';
 import 'multi_output_pipe.dart';
 
 class ReportStatus {
   // Output
   final MultiOutputPipe multiOutputPipe;
+  final NumberFormat numberFormat = NumberFormat("###,###,###,###,###");
 
   // Configuration
   final int reportEverySeconds;
@@ -14,12 +17,16 @@ class ReportStatus {
   final Stopwatch stopwatch = Stopwatch()..start();
   int countFiles = 0;
   int countBytes = 0;
+  int countFilesTotal = 0;
+  int countBytesTotal = 0;
 
   ReportStatus(this.reportEverySeconds, this.multiOutputPipe);
 
   void addFile(int bytes) {
     countFiles++;
+    countFilesTotal++;
     countBytes += bytes;
+    countBytesTotal += bytes;
 
     if (stopwatch.elapsed.inSeconds > reportEverySeconds) {
       final double filesPerSecond =
@@ -28,8 +35,12 @@ class ReportStatus {
           countBytes / (stopwatch.elapsed.inMilliseconds / 1000);
       final double megabytesPerSecond = bytesPerSecond / (1024 * 1024);
 
+      final String filesTotal = numberFormat.format(countFilesTotal);
+      final String megaBytesTotal =
+          numberFormat.format(countBytesTotal / (1024 * 1024));
+
       multiOutputPipe.printOne(
-          "$reportEverySeconds: Files/s: ${filesPerSecond.toStringAsFixed(2)} - MB/s: ${megabytesPerSecond.toStringAsFixed(2)}");
+          "${reportEverySeconds}s mean: Files/s: ${filesPerSecond.toStringAsFixed(2)} - MB/s: ${megabytesPerSecond.toStringAsFixed(2)} - Total files: $filesTotal - Total MB: $megaBytesTotal          "); // -> Added some whitespace at the end for better readability
 
       countFiles = 0;
       countBytes = 0;
