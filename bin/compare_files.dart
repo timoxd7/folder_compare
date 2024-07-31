@@ -55,25 +55,28 @@ Future _readFile(
     final RandomAccessFile file,
     final int fileLength,
     final CancelToken cancelToken) async {
-  while (true) {
-    final Uint8List chunk = await file.read(chunkSize);
+  try {
+    while (true) {
+      final Uint8List chunk = await file.read(chunkSize);
 
-    // Break condition -> cancel token is set
-    if (cancelToken.isCanceled) {
-      return;
+      // Break condition -> cancel token is set
+      // Break condition -> empty means file end is reached
+      // -> add empty chunk to queue to signal end of stream
+      if (chunk.isEmpty || cancelToken.isCanceled) {
+        await queue.add(chunk);
+        return;
+      }
+
+      await queue.add(chunk);
     }
-
-    // Break condition -> empty means file end is reached
-    if (chunk.isEmpty) {
-      break;
-    }
-
-    await queue.add(chunk);
+  } catch (e) {
+    print(e);
+    await queue.add(Uint8List(0));
   }
 }
 
 /// Compare two files by comparing them chunk by chunk.
-Future<bool> compareFiles(File a, File b) async {
+Future<bool> compareFiles(final File a, final File b) async {
   try {
     // Open both files for reading.
     final Future<RandomAccessFile> fileAFuture = a.open();
@@ -100,44 +103,48 @@ Future<bool> compareFiles(File a, File b) async {
     final LimitedQueue<Uint8List> queueB = LimitedQueue<Uint8List>(queueLength);
 
     // Start async reading of both files
-    bool aDone = false, bDone = false;
     final CancelToken cancelTokenA = CancelToken();
     final CancelToken cancelTokenB = CancelToken();
 
-    final Future aFuture = _readFile(queueA, fileA, lengthA, cancelTokenA)
-        .then((_) => aDone = true);
-    final Future bFuture = _readFile(queueB, fileB, lengthB, cancelTokenB)
-        .then((_) => bDone = true);
+    final Future aFuture = _readFile(queueA, fileA, lengthA, cancelTokenA);
+    final Future bFuture = _readFile(queueB, fileB, lengthB, cancelTokenB);
+
+    Future<void> closeFiles() {
+      cancelTokenA.cancel();
+      cancelTokenB.cancel();
+
+      final Future aDoneFuture = aFuture.then((_) => fileA.close());
+      final Future bDoneFuture = bFuture.then((_) => fileB.close());
+
+      return Future.wait([aDoneFuture, bDoneFuture]);
+    }
 
     // Wait for both files to be read
     while (true) {
-      // First check if we might be done
-      if ((aDone && queueA.isEmpty) || (bDone && queueB.isEmpty)) {
-        // One is done, as both have same size, the file has to be equal
-        return true;
-      }
-
+      // Pop elements
       final Future<Uint8List> chunkAFuture = queueA.pop();
       final Future<Uint8List> chunkBFuture = queueB.pop();
 
       final Uint8List chunkA = await chunkAFuture;
       final Uint8List chunkB = await chunkBFuture;
 
+      // Check if one is done
+      if (chunkA.isEmpty && chunkB.isEmpty) {
+        // -> Both files are done
+        await closeFiles();
+        return true;
+      }
+
+      if (chunkA.isEmpty || chunkB.isEmpty) {
+        // Cancel reading of both files -> Different (why?)
+        print("Different file sizes even though lengths are equal (Why?)");
+        await closeFiles();
+        return false;
+      }
+
       if (!memEquals(chunkA, chunkB)) {
         // Cancel reading of both files
-        cancelTokenA.cancel();
-        cancelTokenB.cancel();
-
-        if (!aDone) {
-          await aFuture;
-        }
-
-        if (!bDone) {
-          await bFuture;
-        }
-
-        await Future.wait([fileA.close(), fileB.close()]);
-
+        await closeFiles();
         return false;
       }
     }
