@@ -87,6 +87,25 @@ Future<bool> compareFolders(final Directory a, final Directory b,
       return false;
     }
 
+    // Check if symlink
+    final Future<bool> aIsLinkFuture = FileSystemEntity.isLink(entityA.path);
+    final Future<bool> bIsLinkFuture = FileSystemEntity.isLink(entityB.path);
+
+    final bool aIsLink = await aIsLinkFuture;
+    final bool bIsLink = await bIsLinkFuture;
+
+    if (aIsLink != bIsLink) {
+      print('Different file/folder types (link vs. non-link)');
+      print('${entityA.path}: ${aIsLink}');
+      print('${entityB.path}: ${bIsLink}');
+      return false;
+    }
+
+    if (aIsLink) {
+      // -> Skip links, will result in infinite loop
+      continue;
+    }
+
     // Get stats
     final Future<FileStat> statAFuture = entityA.stat();
     final Future<FileStat> statBFuture = entityB.stat();
