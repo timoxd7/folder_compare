@@ -125,6 +125,11 @@ Future<bool> compareFolders(final Directory a, final Directory b,
         reportStatus.addFile(statsA.size);
         break;
 
+      case FileSystemEntityType.notFound:
+        print(
+            'File ${entityA.parent} notFound type on both folders -> Will skip');
+        break;
+
       default:
         reportStatus.multiOutputPipe.printRecurring(
             'Unsupported type: ${statsA.type} -> Will skip for comparison');
